@@ -21,6 +21,8 @@ manifest:
   remotes:
     - name: upstream
       url-base: https://github.com/zephyrproject-rtos
+    - name: prism-dispatcher-dev
+      url-base: ssh://git@bitbucket.nordicsemi.no:7999/~nika
 
   #
   # Please add items below based on alphabetical order
@@ -133,6 +135,10 @@ manifest:
     - name: trusted-firmware-m
       path: modules/tee/tfm
       revision: 7de2daa1967b2dc12cbe0fcc0171ac3064ea596b
+    - name: prism-dispatcher
+      path: modules/lib/prism-dispatcher
+      remote: prism-dispatcher-dev
+      revision: e3ad3cbf0f7cbf488ced1b62b779c63430c5b5c5
 
   self:
     path: zephyr
