@@ -580,8 +580,13 @@ static int stm32_clock_control_init(struct device *dev)
 	LL_RCC_PLL1_SetVCOInputRange(vco_input_range);
 	LL_RCC_PLL1_SetVCOOutputRange(vco_output_range);
 
-	/* FRACN disable DIVP,DIVQ,DIVR enable*/
+	/* FRACN, DIVP,DIVQ,DIVR enable*/
+#if CONFIG_CLOCK_STM32_PLL_FRACN != 0
+	LL_RCC_PLL1FRACN_Enable();
+	LL_RCC_PLL1_SetFRACN(CONFIG_CLOCK_STM32_PLL_FRACN);
+#else
 	LL_RCC_PLL1FRACN_Disable();
+#endif
 	LL_RCC_PLL1P_Enable();
 	LL_RCC_PLL1Q_Enable();
 	LL_RCC_PLL1R_Enable();
