@@ -710,6 +710,10 @@ static int uart_stm32_init(struct device *dev)
 	/* Set the default baudrate */
 	uart_stm32_set_baudrate(dev, data->baud_rate);
 
+#if defined(UART_STM32_FIFO_ENABLE)
+	LL_USART_EnableFIFO(UartInstance);
+#endif
+
 	LL_USART_Enable(UartInstance);
 
 #ifdef USART_ISR_TEACK

@@ -12,3 +12,10 @@ config UART_STM32
 	  This option enables the UART driver for STM32 family of
 	  processors.
 	  Say y if you wish to use serial port on STM32 MCU.
+
+config UART_STM32_FIFO_ENABLE
+    bool "Enable FIFO"
+    depends on UART_STM32
+    depends on SOC_SERIES_STM32H7X
+    help
+      Enable FIFO for UART peripheral.
