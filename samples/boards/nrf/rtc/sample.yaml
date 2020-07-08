@@ -1,0 +1,6 @@
+sample:
+  name: nrfx usage sample
+tests:
+  sample.board.nrf91.nrfx:
+    platform_whitelist: nrf52840dk_nrf52840
+    tags: board
