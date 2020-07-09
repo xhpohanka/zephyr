@@ -6,93 +6,103 @@
 
 #include <zephyr.h>
 
-#include <hal/nrf_rtc.h>
-#include <tmr_mngr.h>
+/*$$$LICENCE_NORDIC_STANDARD<2018>$$$*/
+
+/**
+ * @defgroup empty_example_main Empty application
+ * @{
+ * @ingroup nrfx_examples
+ *
+ * @brief Empty example Application main file.
+ *
+ * This file contains the source code for a sample application with logger subsystem.
+ *
+ * Please connect development kit and configure following options when opening COM port:
+ *  - Baudrate:   115200
+ *  - Parity:     None
+ *  - Stop bits:  1
+ *  - Data bits:  8
+ *
+ * @}
+ */
+#include <stdlib.h>
+#include <stdint.h>
+//#include <nrfx.h>
 
 #include <logging/log.h>
 LOG_MODULE_REGISTER(MAIN, LOG_LEVEL_INF);
 
-static volatile uint32_t tick;
-static volatile uint32_t inst0_tick;
-static volatile uint32_t inst1_tick;
-static volatile uint32_t inst2_tick;
+#include <tmr_mngr_backend.h>
 
-static volatile bool oneshot_fired = false;
+#include <tmr_srv_ext.h>
 
-void vrtc_handler(uint8_t instance)
+extern uint64_t tmr_mngr_cnt_get(void);
+
+static volatile uint64_t curr_time;
+
+static volatile bool cb_done = true;
+
+static void cb(void * context)
 {
+    curr_time = tmr_mngr_cnt_get();
+    tmr_srv_int_context_t * ctx = (tmr_srv_int_context_t*)&context;
+    LOG_INF("Callback from id %u at %u", ctx->id, (uint32_t)curr_time);
 
-    if (instance == 0)
-    {
-        inst0_tick++;
-    }
-    if (instance == 1)
-    {
-        LOG_INF("x:%u", instance);
-        inst1_tick++;
-    }
-    if (instance == 2)
-    {
-        LOG_INF("x:%u", instance);
-        inst2_tick++;
-    }
-    if (instance == 3)
-    {
-        LOG_INF("x:%u", instance);
-        oneshot_fired = true;
-    }
+    cb_done = true;
 }
 
+static  uint32_t i = 200000;
 
-extern void rtc_handler(void);
-
-void main(void)
+/**
+ * @brief Function for application main entry.
+ */
+int main(void)
 {
-    LOG_INF("pot-rtc sample on %s", CONFIG_BOARD);
-        tmr_mngr_init(vrtc_handler);
 
-        int idx;
+    LOG_INF("tmr_srv_ext_sample %u", sizeof(tmr_srv_int_context_t));
+    timer_service_request_t request =
+    {
+        .timeout_value = 32768 * 5,
+        .settings_mask = 0
+    };
+    sysctl_request_payload_t req_pload =
+    {
+        .type = MSG_TYPE_TIMER_SERVICE,
+        .app_ctx = 0,
+        .data = (void*)&request,
+        .data_size = sizeof(timer_service_request_t)
+    };
+    prism_dispatcher_msg_t msg = {
+        .domain_id = PRISM_DOMAIN_NET,
+        .ept_id = 1,
+        .payload = (void*)&req_pload,
+        .size = sizeof(sysctl_request_payload_t)
+    };
+    if (tmr_srv_ext_init(cb) < 0)
+    {
+        LOG_ERR("tmr_srv_ext_init() returned error");
+    }
+    int ret;
 
-        idx = tmr_mngr_start(TMR_MNGR_MODE_PERIODIC, 1000, 0);
-        LOG_INF("Starting timer %d", idx);
-        if (0 > idx)
+    while (1)
+    {
+        k_sleep(K_MSEC(1000));
+        curr_time = tmr_mngr_cnt_get();
+        request.timeout_value = i;
+        if (cb_done)
         {
-            LOG_INF("Error when started timer %d", idx);
-        }
-
-        idx = tmr_mngr_start(TMR_MNGR_MODE_PERIODIC, 50000, 0);
-        LOG_INF("Starting timer %d", idx);
-        if (0 > idx)
+            LOG_INF("Setting timer to %u at %u", i, (uint32_t)curr_time);
+        if ((ret = tmr_srv_ext_set_timeout(&msg)) < 0)
         {
-            LOG_INF("Error when started timer %d", idx);
+            LOG_ERR("tmr_srv_set_timeout returned %d while setting to %u", ret, i);
         }
-
-        idx = tmr_mngr_start(TMR_MNGR_MODE_PERIODIC, 100, 0);
-        LOG_INF("Starting timer %d", idx);
-        if (0 > idx)
+            i += 120000;
+            cb_done = false;
+        }
+        else
         {
-            LOG_INF("Error when started timer %d", idx);
+            LOG_INF("%u", (uint32_t)curr_time);
         }
-
-        LOG_INF("Starting oneshot timer %d", idx);
-        idx = tmr_mngr_start(TMR_MNGR_MODE_ONE_SHOT, 100000, 0);
-        if (0 > idx)
-        {
-            LOG_INF("Error when started timer %d", idx);
-        }
-
-        while (1)
-        {
-            LOG_INF("ticks inst 0: %d| ticks inst 1: %d | ticks inst 2: %d | CNT: %d | CC: %d",
-                          inst0_tick, inst1_tick, inst2_tick,
-                          (uint32_t)tmr_mngr_cnt_get(),
-                          NRF_RTC0->CC[0]);
-            if (oneshot_fired)
-            {
-                oneshot_fired = !oneshot_fired;
-                LOG_INF("One shot timer fired");
-            }
-            k_sleep(K_MSEC(1000));
-        }
+    }
+    return 0;
 }
-

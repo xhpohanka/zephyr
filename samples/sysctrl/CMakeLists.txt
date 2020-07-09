@@ -13,6 +13,8 @@ project("SYSCTRL application")
 zephyr_library_include_directories(src/events)
 zephyr_library_include_directories(src/modules/messaging)
 zephyr_library_include_directories(src/modules/pot)
+zephyr_library_include_directories(src/modules/tmr_srv_int)
+zephyr_library_include_directories(src/modules/tmr_srv_ext)
 
 # Application sources
 # NORDIC SDK APP START
@@ -36,6 +38,8 @@ target_sources(app PRIVATE
 		src/modules/pot/pot.c
 		src/modules/pot/tmr_mngr.c
 		src/modules/pot/tmr_mngr_backend_nrf52.c
+		src/modules/tmr_srv_int/tmr_srv_int.c
+		src/modules/tmr_srv_ext/tmr_srv_ext.c
 )
 
 # NORDIC SDK APP END

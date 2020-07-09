@@ -7,6 +7,9 @@
 #include <pot.h>
 #include <nrf_bitmask.h>
 
+#include <logging/log.h>
+LOG_MODULE_REGISTER(MNGR, LOG_LEVEL_INF);
+
 /** @brief VRTC instances covered by tree element. */
 static pot_element_t vrtc_instances[TMR_MNGR_NUM];
 
@@ -127,6 +130,10 @@ void tmr_mngr_back_cc_irq(void)
             {
                 once_again = false;
             }
+        }
+        else {
+        	//TODO AKO: not sure if it's good idea in case of only one timer
+        	once_again = false;
         }
     }
 }

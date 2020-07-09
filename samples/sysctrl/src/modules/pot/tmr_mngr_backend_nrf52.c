@@ -13,7 +13,7 @@
 int tmr_back_cc_sync_handler(uint64_t cc_value)
 {
     int ret_code = 0;
-    uint64_t cnt = NRF_RTC0->COUNTER;
+    uint64_t cnt = (uint64_t)nrf_rtc_counter_get(NRF_RTC0);
     // if cc_value is lower than actual counter then error should be raised
     if ((cc_value < cnt) || ((cc_value - cnt) < 3))
     {
@@ -30,7 +30,7 @@ int tmr_back_cc_sync_handler(uint64_t cc_value)
 int tmr_back_cc_handler(uint64_t cc_value)
 {
     int ret_code = 0;
-    uint64_t cnt = NRF_RTC0->COUNTER;
+    uint64_t cnt = (uint64_t)nrf_rtc_counter_get(NRF_RTC0);
     if ((cc_value < cnt) || ((cc_value - cnt) < 1))
     {
         ret_code = -EPERM;
@@ -55,13 +55,13 @@ void tmr_back_stop_handler(void)
 
 uint64_t tmr_back_cnt_get_handler(void)
 {
-    return (uint64_t)NRF_RTC0->COUNTER;
+    return (uint64_t)nrf_rtc_counter_get(NRF_RTC0);
 }
 
 bool tmr_back_constr_check_handler(uint64_t cc_value)
 {
     bool ret_val = true;
-    uint32_t cnt = NRF_RTC0->COUNTER;
+    uint32_t cnt = nrf_rtc_counter_get(NRF_RTC0);
     if ((cc_value < cnt) || ((cc_value - cnt) <= 3))
     {
         ret_val = false;
