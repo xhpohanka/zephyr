@@ -19,6 +19,7 @@
 
 #include <nrfs_led.h>
 #include <nrfs_pm.h>
+#include <nrfs_timer.h>
 
 LOG_MODULE_REGISTER(nrf53net, CONFIG_LOG_DEFAULT_LEVEL);
 
@@ -46,14 +47,27 @@ void prism_irq_handler(void)
 	k_sem_give(&m_sem_irq);
 }
 
+static bool is_timer_srv_response(const void *payload)
+{
+	const nrfs_timer_t *p_req = (const nrfs_timer_t *)payload;
+
+	return p_req->hdr.req == NRFS_TIMER_REQ_ACTION;
+}
+
 static void eptx_handler(void)
 {
 	prism_dispatcher_msg_t msg;
 
 	prism_dispatcher_recv(&msg);
 
-	LOG_INF("[Domain: %d | Ept: %u] handler invoked.", msg.domain_id, msg.ept_id);
-	LOG_HEXDUMP_INF(msg.payload, msg.size, "Payload:");
+	if (is_timer_srv_response(msg.payload)) {
+		const nrfs_timer_t *p_req = (const nrfs_timer_t *)msg.payload;
+
+		LOG_ERR("Time = %d", (uint32_t)p_req->srv.data);
+	} else {
+		LOG_INF("[Domain: %d | Ept: %u] handler invoked.", msg.domain_id, msg.ept_id);
+		LOG_HEXDUMP_INF(msg.payload, msg.size, "Payload:");
+	}
 
 	prism_dispatcher_free(&msg);
 }
@@ -81,8 +95,15 @@ static void pm_service_sleep_req_generate(nrfs_pm_sleep_t *p_req)
 	p_req->data.state = NRFS_PM_SLEEP_SYSTEM_OFF;
 }
 
+static void timer_srv_req_generate(nrfs_timer_t *p_req)
+{
+	NRFS_SERVICE_HDR_FILL(p_req, NRFS_TIMER_REQ_ACTION);
+	p_req->srv.type = NRFS_TIMER_SRV_GET_TIME;
+}
+
 void txrx_thread(void *arg1, void *arg2, void *arg3)
 {
+
 	while (1) {
 		if (k_sem_take(&m_sem_irq, K_USEC(100)) == 0) {
 			prism_dispatcher_err_t status = prism_dispatcher_process(NULL);
@@ -99,21 +120,29 @@ void txrx_thread(void *arg1, void *arg2, void *arg3)
 				.ept_id = ept_id,
 			};
 
-			nrfs_led_t led_req;
+			nrfs_led_t 	led_req;
 			nrfs_pm_sleep_t pm_sleep_req;
-			switch (sys_rand32_get() % 2) {
+			nrfs_timer_t	timer_req;
+			switch (sys_rand32_get() % 3) {
 			case 0:
+			{
+				pm_service_sleep_req_generate(&pm_sleep_req);
+				msg.payload = &pm_sleep_req;
+				msg.size = sizeof(pm_sleep_req);
+			}
+			break;
+			case 1:
 			{
 				led_service_req_generate(&led_req);
 				msg.payload = &led_req;
 				msg.size = sizeof(led_req);
 			}
 			break;
-			case 1:
+			case 2:
 			{
-				pm_service_sleep_req_generate(&pm_sleep_req);
-				msg.payload = &pm_sleep_req;
-				msg.size = sizeof(pm_sleep_req);
+				timer_srv_req_generate(&timer_req);
+				msg.payload = &timer_req;
+				msg.size = sizeof(timer_req);
 			}
 			break;
 			default:
