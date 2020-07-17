@@ -12,6 +12,7 @@ LOG_MODULE_DECLARE(MAIN);
 #include "prism_event.h"
 #include "led_event.h"
 #include "sleep_event.h"
+#include "tmr_srv_ext_event.h"
 
 #include <nrfs_hdr.h>
 
@@ -50,10 +51,19 @@ static void *led_msg_filter(nrfs_phy_t *p_msg)
 	return led_evt;
 }
 
+static void *timer_msg_filter(nrfs_phy_t *p_msg)
+{
+	struct tmr_srv_ext_event *timer_evt = new_tmr_srv_ext_event();
+
+	timer_evt->p_msg = p_msg;
+	return timer_evt;
+}
+
 static void * (*const filters[])(nrfs_phy_t * p_msg) =
 {
 	[NRFS_SERVICE_ID_LED] = led_msg_filter,
 	[NRFS_SERVICE_ID_PM] = pm_msg_filter,
+	[NRFS_SERVICE_ID_TIMER] = timer_msg_filter,
 };
 
 static void msg_received(struct prism_event *evt)

@@ -27,82 +27,26 @@
  */
 #include <stdlib.h>
 #include <stdint.h>
-//#include <nrfx.h>
 
 #include <logging/log.h>
+#include <event_manager.h>
+#include <status_event.h>
+
 LOG_MODULE_REGISTER(MAIN, LOG_LEVEL_INF);
-
-#include <tmr_mngr_backend.h>
-
-#include <tmr_srv_ext.h>
-
-extern uint64_t tmr_mngr_cnt_get(void);
-
-static volatile uint64_t curr_time;
-
-static volatile bool cb_done = true;
-
-static void cb(void * context)
-{
-    curr_time = tmr_mngr_cnt_get();
-    tmr_srv_int_context_t * ctx = (tmr_srv_int_context_t*)&context;
-    LOG_INF("Callback from id %u at %u", ctx->id, (uint32_t)curr_time);
-
-    cb_done = true;
-}
-
-static  uint32_t i = 200000;
 
 /**
  * @brief Function for application main entry.
  */
 int main(void)
 {
+	LOG_ERR("Start");
+	if (event_manager_init()) {
+		LOG_ERR("Event Manager not initialized");
+	} else {
+		struct status_event *event = new_status_event();
+		event->status = STATUS_INIT;
+		EVENT_SUBMIT(event);
+	}
 
-    LOG_INF("tmr_srv_ext_sample %u", sizeof(tmr_srv_int_context_t));
-    timer_service_request_t request =
-    {
-        .timeout_value = 32768 * 5,
-        .settings_mask = 0
-    };
-    sysctl_request_payload_t req_pload =
-    {
-        .type = MSG_TYPE_TIMER_SERVICE,
-        .app_ctx = 0,
-        .data = (void*)&request,
-        .data_size = sizeof(timer_service_request_t)
-    };
-    prism_dispatcher_msg_t msg = {
-        .domain_id = PRISM_DOMAIN_NET,
-        .ept_id = 1,
-        .payload = (void*)&req_pload,
-        .size = sizeof(sysctl_request_payload_t)
-    };
-    if (tmr_srv_ext_init(cb) < 0)
-    {
-        LOG_ERR("tmr_srv_ext_init() returned error");
-    }
-    int ret;
-
-    while (1)
-    {
-        k_sleep(K_MSEC(1000));
-        curr_time = tmr_mngr_cnt_get();
-        request.timeout_value = i;
-        if (cb_done)
-        {
-            LOG_INF("Setting timer to %u at %u", i, (uint32_t)curr_time);
-        if ((ret = tmr_srv_ext_set_timeout(&msg)) < 0)
-        {
-            LOG_ERR("tmr_srv_set_timeout returned %d while setting to %u", ret, i);
-        }
-            i += 120000;
-            cb_done = false;
-        }
-        else
-        {
-            LOG_INF("%u", (uint32_t)curr_time);
-        }
-    }
-    return 0;
+	return 0;
 }

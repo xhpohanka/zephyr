@@ -27,6 +27,7 @@ target_sources(app PRIVATE
 		src/events/performance_event.c
 		src/events/prism_event.c
 		src/events/ld_notify_event.c
+		src/events/tmr_srv_ext_event.c
 )
 
 target_sources(app PRIVATE
