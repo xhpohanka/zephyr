@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2018 Aurelien Jarno
- * Copyright (c) 2018 Yong Jin
+  * Copyright (c) 2020 Jan Pohanka
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -14,9 +13,9 @@
 
 #include "flash_stm32.h"
 
-#define STM32F7X_SECTOR_MASK		((uint32_t) 0xFFFFFF07)
+#define STM32H7X_SECTOR_MASK		((uint32_t) ~(1 << 8))
 
-bool flash_stm32_valid_range(struct device *dev, off_t offset, uint32_t len,
+bool flash_stm32_valid_range(const struct device *dev, off_t offset, uint32_t len,
 			     bool write)
 {
 	ARG_UNUSED(write);
@@ -24,13 +23,13 @@ bool flash_stm32_valid_range(struct device *dev, off_t offset, uint32_t len,
 	return flash_stm32_range_exists(dev, offset, len);
 }
 
-static int write_byte(struct device *dev, off_t offset, uint8_t val)
+static int write_byte(const struct device *dev, off_t offset, uint8_t val)
 {
 	FLASH_TypeDef *regs = FLASH_STM32_REGS(dev);
 	int rc;
 
 	/* if the control register is locked, do not fail silently */
-	if (regs->CR & FLASH_CR_LOCK) {
+	if (regs->CR1 & FLASH_CR_LOCK) {
 		return -EIO;
 	}
 
@@ -40,29 +39,29 @@ static int write_byte(struct device *dev, off_t offset, uint8_t val)
 	}
 
 	/* prepare to write a single byte */
-	regs->CR = (regs->CR & CR_PSIZE_MASK) |
+	regs->CR1 = (regs->CR1 & FLASH_CR_PSIZE_Msk) |
 		   FLASH_PSIZE_BYTE | FLASH_CR_PG;
 	/* flush the register write */
 	__DSB();
 
 	/* write the data */
-	*((uint8_t *) offset + FLASH_BASE) = val;
+	*((uint8_t *) offset + FLASH_BANK1_BASE) = val;
 	/* flush the register write */
 	__DSB();
 
 	rc = flash_stm32_wait_flash_idle(dev);
-	regs->CR &= (~FLASH_CR_PG);
+	regs->CR1 &= (~FLASH_CR_PG);
 
 	return rc;
 }
 
-static int erase_sector(struct device *dev, uint32_t sector)
+static int erase_sector(const struct device *dev, uint32_t sector)
 {
 	FLASH_TypeDef *regs = FLASH_STM32_REGS(dev);
 	int rc;
 
 	/* if the control register is locked, do not fail silently */
-	if (regs->CR & FLASH_CR_LOCK) {
+	if (regs->CR1 & FLASH_CR_LOCK) {
 		return -EIO;
 	}
 
@@ -86,21 +85,21 @@ static int erase_sector(struct device *dev, uint32_t sector)
 #endif /* CONFIG_FLASH_SIZE */
 #endif /* defined(FLASH_OPTCR_nDBANK) && FLASH_SECTOR_TOTAL == 24 */
 
-	regs->CR = (regs->CR & (CR_PSIZE_MASK | STM32F7X_SECTOR_MASK)) |
-		   FLASH_PSIZE_BYTE |
-		   FLASH_CR_SER |
-		   (sector << FLASH_CR_SNB_Pos) |
-		   FLASH_CR_STRT;
+	regs->CR1 = (regs->CR1 & (FLASH_CR_PSIZE_Msk | STM32H7X_SECTOR_MASK)) |
+		     FLASH_PSIZE_BYTE |
+		     FLASH_CR_SER |
+		     (sector << FLASH_CR_SNB_Pos) |
+		     FLASH_CR_START;
 	/* flush the register write */
 	__DSB();
 
 	rc = flash_stm32_wait_flash_idle(dev);
-	regs->CR &= ~(FLASH_CR_SER | FLASH_CR_SNB);
+	regs->CR1 &= ~(FLASH_CR_SER | FLASH_CR_SNB);
 
 	return rc;
 }
 
-int flash_stm32_block_erase_loop(struct device *dev, unsigned int offset,
+int flash_stm32_block_erase_loop(const struct device *dev, unsigned int offset,
 				 unsigned int len)
 {
 	struct flash_pages_info info;
@@ -129,7 +128,7 @@ int flash_stm32_block_erase_loop(struct device *dev, unsigned int offset,
 	return rc;
 }
 
-int flash_stm32_write_range(struct device *dev, unsigned int offset,
+int flash_stm32_write_range(const struct device *dev, unsigned int offset,
 			    const void *data, unsigned int len)
 {
 	int i, rc = 0;
@@ -159,67 +158,30 @@ int flash_stm32_write_range(struct device *dev, unsigned int offset,
  */
 #ifndef FLASH_SECTOR_TOTAL
 #error "Unknown flash layout"
-#elif FLASH_SECTOR_TOTAL == 2
-static const struct flash_pages_layout stm32f7_flash_layout[] = {
-	/* RM0385, table 4: STM32F750xx */
-	{.pages_count = 2, .pages_size = KB(32)},
-};
-#elif FLASH_SECTOR_TOTAL == 4
-static const struct flash_pages_layout stm32f7_flash_layout[] = {
-	/* RM0431, table 4: STM32F730xx */
-	{.pages_count = 4, .pages_size = KB(16)},
-};
-#elif FLASH_SECTOR_TOTAL == 8
-#if CONFIG_FLASH_SIZE == 512
-static const struct flash_pages_layout stm32f7_flash_layout[] = {
-	/* RM0431, table 3: STM32F72xxx and STM32F732xx/F733xx */
-	{.pages_count = 4, .pages_size = KB(16)},
-	{.pages_count = 1, .pages_size = KB(64)},
-	{.pages_count = 3, .pages_size = KB(128)},
-};
-#elif CONFIG_FLASH_SIZE == 1024
-static const struct flash_pages_layout stm32f7_flash_layout[] = {
-	/* RM0385, table 3: STM32F756xx and STM32F74xxx */
-	{.pages_count = 4, .pages_size = KB(32)},
+#elif FLASH_SECTOR_TOTAL == 1
+static const struct flash_pages_layout stm32h7_flash_layout[] = {
+	/* RM0433, table 11: STM32H750xx */
 	{.pages_count = 1, .pages_size = KB(128)},
-	{.pages_count = 3, .pages_size = KB(256)},
-};
-#endif /* CONFIG_FLASH_SIZE */
-#elif FLASH_SECTOR_TOTAL == 24
-static const struct flash_pages_layout stm32f7_flash_layout_single_bank[] = {
-	/* RM0410, table 3: STM32F76xxx and STM32F77xxx in single bank */
-	{.pages_count = 4, .pages_size = KB(32)},
-	{.pages_count = 1, .pages_size = KB(128)},
-	{.pages_count = 7, .pages_size = KB(256)},
-};
-static const struct flash_pages_layout stm32f7_flash_layout_dual_bank[] = {
-	/* RM0410, table 4: STM32F76xxx and STM32F77xxx in dual bank */
-	{.pages_count = 4, .pages_size = KB(16)},
-	{.pages_count = 1, .pages_size = KB(64)},
-	{.pages_count = 7, .pages_size = KB(128)},
-	{.pages_count = 4, .pages_size = KB(16)},
-	{.pages_count = 1, .pages_size = KB(64)},
-	{.pages_count = 7, .pages_size = KB(128)},
 };
 #else
 #error "Unknown flash layout"
 #endif/* !defined(FLASH_SECTOR_TOTAL) */
 
-void flash_stm32_page_layout(struct device *dev,
+void flash_stm32_page_layout(const struct device *dev,
 			     const struct flash_pages_layout **layout,
 			     size_t *layout_size)
 {
-#if FLASH_OPTCR_nDBANK
+#if FLASH_OPTCR_nDBANK // TODO! H7 way
 	if (FLASH_STM32_REGS(dev)->OPTCR & FLASH_OPTCR_nDBANK) {
-		*layout = stm32f7_flash_layout_single_bank;
-		*layout_size = ARRAY_SIZE(stm32f7_flash_layout_single_bank);
+		*layout = stm32h7_flash_layout_single_bank;
+		*layout_size = ARRAY_SIZE(stm32h7_flash_layout_single_bank);
 	} else {
-		*layout = stm32f7_flash_layout_dual_bank;
-		*layout_size = ARRAY_SIZE(stm32f7_flash_layout_dual_bank);
+		*layout = stm32h7_flash_layout_dual_bank;
+		*layout_size = ARRAY_SIZE(stm32h7_flash_layout_dual_bank);
 	}
 #else
 	ARG_UNUSED(dev);
-	*layout = stm32f7_flash_layout;
-	*layout_size = ARRAY_SIZE(stm32f7_flash_layout);
+	*layout = stm32h7_flash_layout;
+	*layout_size = ARRAY_SIZE(stm32h7_flash_layout);
 #endif
 }
